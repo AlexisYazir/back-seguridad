@@ -240,7 +240,7 @@ export const verifyEmail = async (req, res) => {
           <div class="success">
             <h1>✅ Email Verificado Exitosamente</h1>
             <p>Tu cuenta ha sido verificada. Ahora puedes iniciar sesión.</p>
-            <a href="https://sitio-seguridad.netlify.app//login" class="btn">Ir al Login</a>
+            <a href="https://sitio-seguridad.netlify.app/login" class="btn">Ir al Login</a>
           </div>
         </body>
       </html>
@@ -274,11 +274,11 @@ export const googleCallback = (req, res, next) => {
 
     if (err) {
       console.error('Error en autenticación con Google:', err)
-      return res.redirect('https://sitio-seguridad.netlify.app//login?error=auth_failed')
+      return res.redirect('https://sitio-seguridad.netlify.app/login?error=auth_failed')
     }
     if (!user) {
       console.error('Usuario no encontrado después de autenticación con Google')
-      return res.redirect('https://sitio-seguridad.netlify.app//login?error=user_not_found')
+      return res.redirect('https://sitio-seguridad.netlify.app/login?error=user_not_found')
     }
 
     const token = jwt.sign(
@@ -298,6 +298,6 @@ export const googleCallback = (req, res, next) => {
       maxAge: 24 * 60 * 60 * 1000
     })
 
-    res.redirect('https://sitio-seguridad.netlify.app//dashboard')
+    res.redirect('https://sitio-seguridad.netlify.app/dashboard')
   })(req, res, next)
 }
