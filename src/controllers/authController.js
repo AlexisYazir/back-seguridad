@@ -141,31 +141,44 @@ export const login = async (req, res) => {
     res.status(500).json({ message: 'Error en el servidor' })
   }
 }
-
 export const verify = async (req, res) => {
   try {
     const token = req.cookies.token
+    console.log('🔐 Verificando autenticación - Token presente:', !!token)
+    
     if (!token) {
+      console.log('❌ No hay token en cookies')
       return res.status(401).json({ message: 'No autenticado' })
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'mi_secret')
+    console.log('✅ Token válido para usuario ID:', decoded.id)
     
-    //  Buscar usuario sin la contraseña
+    // Buscar usuario sin la contraseña
     const [rows] = await db.query(
       'SELECT id_usuario, email, username FROM users WHERE id_usuario = ?', 
       [decoded.id]
     )
 
     if (rows.length === 0) {
+      console.log('❌ Usuario no encontrado en BD para ID:', decoded.id)
       return res.status(404).json({ message: 'Usuario no encontrado' })
     }
 
+    console.log('✅ Usuario verificado:', rows[0].email)
     res.json({ user: rows[0] })
+    
   } catch (err) {
-    console.error('Error en verify:', err)
-    //  Limpiar cookie si es inválida
-    res.clearCookie('token')
+    console.error('❌ Error en verify:', err.message)
+    
+    // ✅ LIMPIAR COOKIE CON LA MISMA CONFIGURACIÓN
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      domain: '.vercel.app' // ⚠️ MISMO DOMINIO que al crear
+    })
+    
     res.status(401).json({ message: 'Token inválido o expiró' })
   }
 }
@@ -266,12 +279,9 @@ export const googleAuth = passport.authenticate('google', {
   scope: ['profile', 'email']
 })
 export const googleCallback = (req, res, next) => {
-  // Usar { session: false } para evitar sesiones de Passport
   passport.authenticate('google', { session: false }, (err, user, info) => {
     console.log('--- CALLBACK DE GOOGLE ---')
     console.log('Usuario recibido:', user ? user.email : 'NO USER')
-    console.log('Error:', err)
-    console.log('Info:', info)
     console.log('---------------------------')
 
     if (err) {
@@ -283,7 +293,7 @@ export const googleCallback = (req, res, next) => {
       return res.redirect('https://sitio-seguridad.netlify.app/login?error=user_not_found')
     }
 
-    // Crear token JWT con los datos del usuario CORRECTO
+    // Crear token JWT
     const token = jwt.sign(
       { 
         id: user.id_usuario, 
@@ -294,15 +304,16 @@ export const googleCallback = (req, res, next) => {
       { expiresIn: '24h' }
     )
 
-    // Configurar cookie
+    // ✅ CONFIGURACIÓN IDÉNTICA A clearCookie
     res.cookie('token', token, {
       httpOnly: true,
-      secure: true, // Siempre true en producción
-      sameSite: 'none', // Para cross-domain
-      maxAge: 24 * 60 * 60 * 1000
+      secure: true,
+      sameSite: 'none',
+      maxAge: 24 * 60 * 60 * 1000,
+      domain: '.vercel.app' // ⚠️ MISMO DOMINIO que en clearCookie
     })
 
-    console.log('✅ Login exitoso para:', user.email);
+    console.log('✅ Cookie establecida para:', user.email);
     res.redirect('https://sitio-seguridad.netlify.app/dashboard')
   })(req, res, next)
 }
