@@ -4,6 +4,7 @@ import { db } from './db.js'
 import dotenv from 'dotenv'
 dotenv.config()
 
+
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -11,40 +12,24 @@ passport.use(new GoogleStrategy({
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
-      console.log('🔐 Google OAuth para:', profile.emails[0].value);
-      
-      // Buscar usuario por Google ID PRIMERO
-      const [usersByGoogleId] = await db.query(
-        "SELECT * FROM users WHERE google_id = ?", 
-        [profile.id]
-      );
+      // Buscar usuario por Google ID
+      const [existingUser] = await db.query(
+        "SELECT * FROM users WHERE google_id = ? OR email = ?", 
+        [profile.id, profile.emails[0].value]
+      )
 
-      if (usersByGoogleId.length > 0) {
-        console.log('✅ Usuario encontrado por Google ID:', usersByGoogleId[0].email);
-        return done(null, usersByGoogleId[0]);
-      }
-
-      // Buscar por email
-      const [usersByEmail] = await db.query(
-        "SELECT * FROM users WHERE email = ?", 
-        [profile.emails[0].value]
-      );
-
-      if (usersByEmail.length > 0) {
-        console.log('✅ Usuario encontrado por email:', usersByEmail[0].email);
-        
-        // Actualizar con Google ID
-        await db.query(
-          "UPDATE users SET google_id = ? WHERE id_usuario = ?",
-          [profile.id, usersByEmail[0].id_usuario]
-        );
-        
-        usersByEmail[0].google_id = profile.id;
-        return done(null, usersByEmail[0]);
+      if (existingUser.length > 0) {
+        // Actualizar usuario existente con Google ID si es necesario
+        if (!existingUser[0].google_id) {
+          await db.query(
+            "UPDATE users SET google_id = ? WHERE id_usuario = ?",
+            [profile.id, existingUser[0].id_usuario]
+          )
+        }
+        return done(null, existingUser[0])
       }
 
       // Crear nuevo usuario
-      console.log('🆕 Creando nuevo usuario:', profile.emails[0].value);
       const [result] = await db.query(
         `INSERT INTO users 
          (username, email, google_id, email_verified, created_at) 
@@ -64,25 +49,25 @@ passport.use(new GoogleStrategy({
         email_verified: true
       }
 
-      console.log('✅ Nuevo usuario creado:', newUser.email);
-      return done(null, newUser);
-
+      return done(null, newUser)
     } catch (error) {
-      console.error('❌ Error en Google Strategy:', error);
-      return done(error, null);
+      return done(error, null)
     }
   }
 ))
 
-// ⚠️ ELIMINAR serializeUser y deserializeUser si solo usas JWT
-// O mantenerlos vacíos si necesitas la estructura
-
+// Serialización del usuario
 passport.serializeUser((user, done) => {
-  done(null, user); // Solo pasar el usuario, no el ID
-});
+  done(null, user.id_usuario)
+})
 
-passport.deserializeUser((user, done) => {
-  done(null, user); // Devolver el mismo usuario
-});
+passport.deserializeUser(async (id, done) => {
+  try {
+    const [rows] = await db.query("SELECT * FROM users WHERE id_usuario = ?", [id])
+    done(null, rows[0])
+  } catch (error) {
+    done(error, null)
+  }
+})
 
 export default passport
