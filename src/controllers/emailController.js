@@ -22,7 +22,7 @@ const generateVerificationToken = (email) => {
 
 export const sendVerificationEmail = async (userEmail, username, verificationToken) => {
   try {
-    const verificationLink = `http://localhost:3000/api/auth/verify-email?token=${verificationToken}`
+    const verificationLink = `https://back-seguridad-ruby.vercel.app/api/auth/verify-email?token=${verificationToken}`
     
     const mailOptions = {
       from: `"Sistema de Seguridad" <${process.env.EMAIL_USER}>`,

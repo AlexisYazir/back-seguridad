@@ -36,4 +36,20 @@ app.get('/health', (req, res) => {
   })
 })
 
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  })
+})
+
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Backend de Seguridad API',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development'
+  })
+})
+
 export default app
