@@ -28,4 +28,12 @@ app.use('/api/auth', authRoutes)
 app.use('/api/totp', totpRoutes)
 app.use('/api/auth/password-reset', passwordResetRoutes);
 
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  })
+})
+
 export default app
