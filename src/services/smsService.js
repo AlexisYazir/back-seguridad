@@ -32,7 +32,7 @@ export const sendVerificationSMS = async (telefono, codigo) => {
       to: telefono
     });
 
-    console.log(`✅ SMS enviado a ${telefono}, SID: ${message.sid}`);
+    console.log(`SMS enviado a ${telefono}, SID: ${message.sid}`);
     return { 
       success: true, 
       sid: message.sid,
