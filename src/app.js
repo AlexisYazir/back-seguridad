@@ -10,35 +10,31 @@ import passwordResetRoutes from './routes/passwordReset.js'
 const app = express()
 
 // ✅ CONFIGURACIÓN CORS MEJORADA
-const corsOptions = {
+app.use(cors({ 
   origin: [
     'https://sitio-seguridad.netlify.app',
-    'http://localhost:5173'
+    'http://localhost:5173' // Para desarrollo
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie'],
   exposedHeaders: ['Set-Cookie']
-}
-
-app.use(cors(corsOptions))
-
-// Manejar preflight requests explícitamente
-app.options('*', cors(corsOptions))
+}))
 
 app.use(express.json())
 app.use(cookieParser())
 
-// Configuración de session (si la usas)
+// ✅ CONFIGURACIÓN DE SESSION MEJORADA
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'session_secret',
+  secret: process.env.SESSION_SECRET || 'session_secret_production',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: true,
-    httpOnly: true,
-    sameSite: 'none',
-    maxAge: 24 * 60 * 60 * 1000
+    secure: true, // ✅ Solo HTTPS en producción
+    httpOnly: true, // ✅ Prevenir acceso via JavaScript
+    sameSite: 'none', // ✅ Permitir cross-domain
+    maxAge: 24 * 60 * 60 * 1000, // 24 horas
+    domain: '.vercel.app' // ✅ O el dominio de tu backend
   }
 }))
 
