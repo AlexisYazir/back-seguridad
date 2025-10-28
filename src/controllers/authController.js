@@ -6,6 +6,23 @@ import { sendVerificationEmail } from './emailController.js'
 import passport from '../config/passport.js'
 dotenv.config();
 
+// 🔧 CONFIGURACIÓN UNIFICADA DE COOKIES
+const cookieConfig = {
+  httpOnly: true,
+  secure: true, // ✅ SIEMPRE true en producción
+  sameSite: 'none', // ✅ SIEMPRE none para cross-domain
+  maxAge: 24 * 60 * 60 * 1000, // 24 horas
+  domain: '.vercel.app' // ✅ SIEMPRE el mismo dominio
+};
+
+// 🔧 CONFIGURACIÓN UNIFICADA PARA LIMPIAR COOKIES
+const clearCookieConfig = {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'none',
+  domain: '.vercel.app'
+};
+
 export const register = async (req, res) => {
   try {
     const { username, email, password, telefono } = req.body;
@@ -115,16 +132,11 @@ export const login = async (req, res) => {
         telefono: user.telefono
       },
       process.env.JWT_SECRET || 'mi_secret', 
-      { expiresIn: '24h' } //  Aumentar tiempo para mejor UX
+      { expiresIn: '24h' }
     )
 
-    // Configurar cookie más robusta
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // Importante para HTTPS
-      sameSite: 'none',
-      maxAge: 24 * 60 * 60 * 1000 // 24 horas
-    })
+    // ✅ CONFIGURACIÓN UNIFICADA
+    res.cookie('token', token, cookieConfig)
 
     //  Enviar también los datos del usuario en la respuesta
     res.json({ 
@@ -141,6 +153,7 @@ export const login = async (req, res) => {
     res.status(500).json({ message: 'Error en el servidor' })
   }
 }
+
 export const verify = async (req, res) => {
   try {
     const token = req.cookies.token
@@ -171,38 +184,30 @@ export const verify = async (req, res) => {
   } catch (err) {
     console.error('❌ Error en verify:', err.message)
     
-    // ✅ LIMPIAR COOKIE CON LA MISMA CONFIGURACIÓN
-    res.clearCookie('token', {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      domain: '.vercel.app' // ⚠️ MISMO DOMINIO que al crear
-    })
+    // ✅ CONFIGURACIÓN UNIFICADA
+    res.clearCookie('token', clearCookieConfig)
     
     res.status(401).json({ message: 'Token inválido o expiró' })
   }
 }
+
 export const logout = (req, res) => {
   try {
-    // Limpiar la cookie del token
-    res.clearCookie('token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax'
-    });
+    // ✅ CONFIGURACIÓN UNIFICADA
+    res.clearCookie('token', clearCookieConfig)
 
     res.json({ 
       success: true, 
       message: 'Sesión cerrada exitosamente' 
-    });
+    })
   } catch (error) {
-    console.error('Error en logout:', error);
+    console.error('Error en logout:', error)
     res.status(500).json({ 
       success: false, 
       message: 'Error al cerrar sesión' 
-    });
+    })
   }
-};
+}
 
 export const verifyEmail = async (req, res) => {
   try {
@@ -278,6 +283,7 @@ export const verifyEmail = async (req, res) => {
 export const googleAuth = passport.authenticate('google', {
   scope: ['profile', 'email']
 })
+
 export const googleCallback = (req, res, next) => {
   passport.authenticate('google', { session: false }, (err, user, info) => {
     console.log('--- CALLBACK DE GOOGLE ---')
@@ -304,16 +310,38 @@ export const googleCallback = (req, res, next) => {
       { expiresIn: '24h' }
     )
 
-    // ✅ CONFIGURACIÓN IDÉNTICA A clearCookie
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: 24 * 60 * 60 * 1000,
-      domain: '.vercel.app' // ⚠️ MISMO DOMINIO que en clearCookie
-    })
+    // ✅ CONFIGURACIÓN UNIFICADA
+    res.cookie('token', token, cookieConfig)
 
-    console.log('✅ Cookie establecida para:', user.email);
+    console.log('✅ Cookie establecida para:', user.email)
     res.redirect('https://sitio-seguridad.netlify.app/dashboard')
   })(req, res, next)
 }
+
+// 🔍 ENDPOINT TEMPORAL PARA DEBUG
+export const debugAuth = async (req, res) => {
+  const token = req.cookies.token;
+  console.log('🔍 DEBUG AUTH - Token presente:', !!token);
+  
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'mi_secret');
+      console.log('🔍 DEBUG AUTH - Token válido para:', decoded.email);
+      
+      const [user] = await db.query('SELECT * FROM users WHERE id_usuario = ?', [decoded.id]);
+      console.log('🔍 DEBUG AUTH - Usuario en BD:', user[0]?.email);
+      
+      res.json({ 
+        tokenPresent: true, 
+        tokenValid: true,
+        user: user[0] ? { id: user[0].id_usuario, email: user[0].email } : null,
+        decoded 
+      });
+    } catch (error) {
+      console.log('🔍 DEBUG AUTH - Token inválido:', error.message);
+      res.json({ tokenPresent: true, tokenValid: false, error: error.message });
+    }
+  } else {
+    res.json({ tokenPresent: false, tokenValid: false });
+  }
+};
