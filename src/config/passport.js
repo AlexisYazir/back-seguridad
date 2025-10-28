@@ -11,16 +11,12 @@ passport.use(new GoogleStrategy({
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
-      console.log('🔐 Procesando autenticación Google para:', profile.emails[0].value);
+      console.log('🔐 Google OAuth para:', profile.emails[0].value);
       
-      const googleEmail = profile.emails[0].value;
-      const googleId = profile.id;
-      const displayName = profile.displayName || googleEmail.split('@')[0];
-
-      // 1. PRIMERO buscar solo por google_id (usuarios que ya se registraron con Google)
+      // Buscar usuario por Google ID PRIMERO
       const [usersByGoogleId] = await db.query(
         "SELECT * FROM users WHERE google_id = ?", 
-        [googleId]
+        [profile.id]
       );
 
       if (usersByGoogleId.length > 0) {
@@ -28,114 +24,65 @@ passport.use(new GoogleStrategy({
         return done(null, usersByGoogleId[0]);
       }
 
-      // 2. BUSCAR por email (usuarios existentes que quieren usar Google)
+      // Buscar por email
       const [usersByEmail] = await db.query(
         "SELECT * FROM users WHERE email = ?", 
-        [googleEmail]
+        [profile.emails[0].value]
       );
 
       if (usersByEmail.length > 0) {
-        console.log('✅ Usuario encontrado por email, actualizando Google ID...');
+        console.log('✅ Usuario encontrado por email:', usersByEmail[0].email);
         
-        // Actualizar el usuario existente con el Google ID
+        // Actualizar con Google ID
         await db.query(
-          "UPDATE users SET google_id = ?, email_verified = true WHERE email = ?",
-          [googleId, googleEmail]
+          "UPDATE users SET google_id = ? WHERE id_usuario = ?",
+          [profile.id, usersByEmail[0].id_usuario]
         );
         
-        // Obtener el usuario actualizado
-        const [updatedUser] = await db.query(
-          "SELECT * FROM users WHERE email = ?", 
-          [googleEmail]
-        );
-        
-        return done(null, updatedUser[0]);
+        usersByEmail[0].google_id = profile.id;
+        return done(null, usersByEmail[0]);
       }
 
-      // 3. CREAR NUEVO USUARIO (si no existe por Google ID ni por email)
-      console.log('🆕 Creando nuevo usuario con Google...');
-      
-      // Generar username único
-      let username = displayName;
-      let counter = 1;
-      
-      // Verificar si el username ya existe
-      let [existingUsername] = await db.query(
-        "SELECT id_usuario FROM users WHERE username = ?", 
-        [username]
-      );
-      
-      while (existingUsername.length > 0) {
-        username = `${displayName}${counter}`;
-        [existingUsername] = await db.query(
-          "SELECT id_usuario FROM users WHERE username = ?", 
-          [username]
-        );
-        counter++;
-      }
-
-      // Insertar nuevo usuario
+      // Crear nuevo usuario
+      console.log('🆕 Creando nuevo usuario:', profile.emails[0].value);
       const [result] = await db.query(
         `INSERT INTO users 
          (username, email, google_id, email_verified, created_at) 
          VALUES (?, ?, ?, true, NOW())`,
-        [username, googleEmail, googleId]
-      );
+        [
+          profile.displayName || profile.emails[0].value.split('@')[0],
+          profile.emails[0].value,
+          profile.id
+        ]
+      )
 
       const newUser = {
         id_usuario: result.insertId,
-        username: username,
-        email: googleEmail,
-        google_id: googleId,
+        username: profile.displayName || profile.emails[0].value.split('@')[0],
+        email: profile.emails[0].value,
+        google_id: profile.id,
         email_verified: true
-      };
+      }
 
-      console.log('✅ Nuevo usuario creado exitosamente:', newUser.email);
+      console.log('✅ Nuevo usuario creado:', newUser.email);
       return done(null, newUser);
 
     } catch (error) {
       console.error('❌ Error en Google Strategy:', error);
-      
-      // Manejo específico de errores de duplicación
-      if (error.code === 'ER_DUP_ENTRY') {
-        if (error.sqlMessage.includes('email')) {
-          console.log('⚠️ Email duplicado, intentando recuperar usuario...');
-          // Intentar recuperar el usuario existente
-          try {
-            const [existingUser] = await db.query(
-              "SELECT * FROM users WHERE email = ?", 
-              [profile.emails[0].value]
-            );
-            if (existingUser.length > 0) {
-              console.log('✅ Usuario recuperado después de error de duplicación');
-              return done(null, existingUser[0]);
-            }
-          } catch (recoveryError) {
-            console.error('Error recuperando usuario:', recoveryError);
-          }
-        }
-      }
-      
       return done(error, null);
     }
   }
-));
+))
 
-// Serialización del usuario
+// ⚠️ ELIMINAR serializeUser y deserializeUser si solo usas JWT
+// O mantenerlos vacíos si necesitas la estructura
+
 passport.serializeUser((user, done) => {
-  done(null, user.id_usuario);
+  done(null, user); // Solo pasar el usuario, no el ID
 });
 
-passport.deserializeUser(async (id, done) => {
-  try {
-    const [rows] = await db.query(
-      "SELECT id_usuario, username, email, google_id, email_verified FROM users WHERE id_usuario = ?", 
-      [id]
-    );
-    done(null, rows[0]);
-  } catch (error) {
-    done(error, null);
-  }
+passport.deserializeUser((user, done) => {
+  done(null, user); // Devolver el mismo usuario
 });
 
-export default passport;
+export default passport

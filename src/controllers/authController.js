@@ -265,11 +265,13 @@ export const verifyEmail = async (req, res) => {
 export const googleAuth = passport.authenticate('google', {
   scope: ['profile', 'email']
 })
-
 export const googleCallback = (req, res, next) => {
-  passport.authenticate('google', (err, user, info) => {
+  // Usar { session: false } para evitar sesiones de Passport
+  passport.authenticate('google', { session: false }, (err, user, info) => {
     console.log('--- CALLBACK DE GOOGLE ---')
-    console.log({ err, user, info })
+    console.log('Usuario recibido:', user ? user.email : 'NO USER')
+    console.log('Error:', err)
+    console.log('Info:', info)
     console.log('---------------------------')
 
     if (err) {
@@ -281,23 +283,26 @@ export const googleCallback = (req, res, next) => {
       return res.redirect('https://sitio-seguridad.netlify.app/login?error=user_not_found')
     }
 
+    // Crear token JWT con los datos del usuario CORRECTO
     const token = jwt.sign(
       { 
         id: user.id_usuario, 
         email: user.email,
         username: user.username 
       },
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET || 'mi_secret',
       { expiresIn: '24h' }
     )
 
+    // Configurar cookie
     res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true, // Siempre true en producción
+      sameSite: 'none', // Para cross-domain
       maxAge: 24 * 60 * 60 * 1000
     })
 
+    console.log('✅ Login exitoso para:', user.email);
     res.redirect('https://sitio-seguridad.netlify.app/dashboard')
   })(req, res, next)
 }
